@@ -6,5 +6,11 @@ dependencies:
   - matplotlib
   - pandas
   - h5py
+  - hdf5
+  - ipython
+  - ipywidgets
+  - jupyterlab
   - scipy
   - plotly
+  - pytables
+  - ipympl
