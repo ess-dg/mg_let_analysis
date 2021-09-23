@@ -4,11 +4,6 @@
 energy.py: Contains functions which makes energy calculations.
 """
 
-import os
-import struct
-import shutil
-import zipfile
-import re
 import numpy as np
 import pandas as pd
 

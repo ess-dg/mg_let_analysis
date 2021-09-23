@@ -99,6 +99,7 @@ def import_data(file_path, maximum_file_size_in_mb=np.inf):
 
     Args:
         file_path (str): Path to '.mesytec'-file that contains the data
+        maximum_file_size_in_mb (float): Maximum allowed file size to import
 
     Returns:
         data (tuple): A tuple where each element is a 32 bit mesytec word

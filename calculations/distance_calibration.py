@@ -5,11 +5,6 @@ distance_calibration.py: Contains functions related to distance calibration for
                          the Multi-Grid detector.
 """
 
-import os
-import struct
-import shutil
-import zipfile
-import re
 import numpy as np
 import pandas as pd
 

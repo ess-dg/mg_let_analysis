@@ -4,11 +4,6 @@
 fitting.py: Contains functions related to fitting procedures of the data.
 """
 
-import os
-import struct
-import shutil
-import zipfile
-import re
 import numpy as np
 import pandas as pd
 import scipy.optimize as sci_opt

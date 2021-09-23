@@ -4,7 +4,6 @@
 read.py: Reads data collected with LET helium-3 tubes
 """
 
-import os
 import numpy as np
 import pandas as pd
 import h5py

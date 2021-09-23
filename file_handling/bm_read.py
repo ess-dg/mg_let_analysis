@@ -4,11 +4,6 @@
 bm_read.py: Reads data collected with LET beam monitors
 """
 
-import os
-import struct
-import shutil
-import zipfile
-import re
 import numpy as np
 import pandas as pd
 import h5py

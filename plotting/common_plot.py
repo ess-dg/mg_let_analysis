@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-mg_basic_plot.py: Contains the basic functions to plot Multi-Grid data.
+mg_common_plot.py: Contains common functions for plotting data
 """
 import os
 import matplotlib.pyplot as plt
