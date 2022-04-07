@@ -7,7 +7,7 @@ manage.py: Contains functions to manage Multi-Grid data
 import numpy as np
 import pandas as pd
 
-import file_handling.mg_seq_read as mg_read
+import file_handling.mg_seq.mg_seq_read as mg_read
 
 # ==============================================================================
 #                                  FILTER DATA
