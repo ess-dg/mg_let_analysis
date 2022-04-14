@@ -9,9 +9,12 @@ from matplotlib.colors import LogNorm
 import matplotlib.patheffects as path_effects
 import numpy as np
 import pandas as pd
+import plotly as py
+import plotly.graph_objs as go
 
 import plotting.helper_functions as plotting_hf
 import file_handling.mg_seq.mg_seq_manage as mg_manage
+import calculations.distance_calibration as dc
 
 # ==============================================================================
 #                                   PHS (1D)
@@ -163,12 +166,84 @@ def clusters_2d_plot(clusters, title, vmin, vmax, duration):
                #norm=LogNorm(vmin=vmin, vmax=vmax),
                #vmin=vmin, vmax=vmax,
                cmap='jet',
-               weights=(1/duration)*np.ones(len(clusters.wch)))
+               #weights=(1/duration)*np.ones(len(clusters.wch))
+              )
+    
     plt.xlabel('Wire (Channel number)')
     plt.ylabel('Grid (Channel number)')
     plt.title(title)
     cbar = plt.colorbar()
-    cbar.set_label('Counts/s')
+    cbar.set_label('Counts')
+    
+# ==============================================================================
+#                          COINCIDENCE HISTOGRAM (3D)
+# ==============================================================================
+
+def clusters_3d_plot(df, title):
+    """
+    Plots a 3D histograms of clusters.
+
+    Args:
+        df (DataFrame): Clustered events
+        title (str): Title of plot
+
+    Yields:
+        Plot containing the 3D coincidences
+
+    """
+    H, __ = np.histogramdd(df[['wch', 'gch']].values,
+                           bins=(96, 37),
+                           range=((0, 96), (96, 133)))
+    # Insert results into an array
+    hist = [[], [], [], []]
+    loc = 0
+    labels = []
+    for wch in range(0, 96):
+        for gch in range(96, 133):
+            x, y, z = dc.get_local_xyz(wch, gch)
+            hist[0].append(x)
+            hist[1].append(y)
+            hist[2].append(z)
+            hist[3].append(H[wch, gch-96])
+            loc += 1
+            labels.append('Wire channel: ' + str(wch) + '<br>'
+                          + 'Grid channel: ' + str(gch) + '<br>'
+                          + 'Counts: ' + str(H[wch, gch-96])
+                          )
+    # Produce 3D histogram plot
+    MG_3D_trace = go.Scatter3d(x=hist[0],
+                               y=hist[1],
+                               z=hist[2],
+                               mode='markers',
+                               marker=dict(size=5,
+                                           color=hist[3],
+                                           colorscale='Jet',
+                                           opacity=1,
+                                           colorbar=dict(thickness=20,
+                                                         title='Counts'
+                                                         ),
+                                           ),
+                               text=labels,
+                               name='Multi-Grid',
+                               scene='scene1'
+                               )
+    # Introduce figure and put everything together
+    fig = py.subplots.make_subplots(rows=1, cols=1, specs=[[{'is_3d': True}]])
+    # Insert histogram
+    fig.append_trace(MG_3D_trace, 1, 1)
+    fig['layout']['scene1']['xaxis'].update(title='x (m)')#, range=[0, 1.1])
+    fig['layout']['scene1']['yaxis'].update(title='y (m)')#, range=[0, 1.1])
+    fig['layout']['scene1']['zaxis'].update(title='z (m)')#, range=[-1.1, 0])
+    fig['layout']['scene1'].update(aspectmode='data')
+    fig['layout'].update(title='Coincidences (3D)<br>Data set: ' + str(title) + '.pcapng')
+    fig.layout.showlegend = False
+    # Plot
+    py.offline.init_notebook_mode()
+    #py.offline.iplot(fig)
+    py.offline.plot(fig,
+                    filename='../output/coincident_events_histogram.html',
+                    auto_open=True)
+
 
 # ==============================================================================
 #                               MULTIPLICITY

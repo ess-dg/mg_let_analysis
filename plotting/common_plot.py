@@ -13,6 +13,10 @@ import pandas as pd
 import scipy.signal as sci_sig
 import calculations.energy as e_calc
 import calculations.fitting as fit
+import calculations.distance_calibration as dc
+
+import plotly as py
+import plotly.graph_objs as go
 
 # ==============================================================================
 #                               TOF HISTOGRAM
@@ -331,3 +335,145 @@ def get_all_foms(tof_in_us, sample_to_detection_in_m, number_bins,
         fig.savefig(output_path, bbox_inches='tight')
         plt.show()
     return incident_energies, fom_values, peak_counts, shoulder_counts
+
+# ==============================================================================
+#                        PLOT HELIUM-3 AND MULTI-GRID
+# ==============================================================================
+
+def plot_mg_and_he3_3d(df_mg, df_he3, he3_mapping, mg_offset, mg_theta, region_edges=None):
+    # Helium-3 tubes
+    hist, __ = np.histogram(df_he3['pixel_id'], bins=len(he3_mapping['x']),
+                            range=[0, len(he3_mapping['x'])])
+    hist_non_zero_indices = np.where(hist != 0)[0]
+    # Define labels
+    labels = []
+    for i in np.arange(0, len(he3_mapping['x']), 1):
+        labels.append('ID: %d<br>Counts: %d<br>θ: %.2f°<br>φ: %.2f°' % (i, hist[i],
+                                                                        he3_mapping['theta'][i],
+                                                                        he3_mapping['phi'][i]))
+    labels = np.array(labels)
+    # Plot
+    trace_1 = go.Scatter3d(
+        x=he3_mapping['x'][hist_non_zero_indices],
+        y=he3_mapping['y'][hist_non_zero_indices],
+        z=he3_mapping['z'][hist_non_zero_indices],
+        mode='markers',
+        marker=dict(
+            size=4,
+            color=np.log10(hist[hist_non_zero_indices]),
+            colorscale='Jet',
+            opacity=1,
+            colorbar=dict(thickness=20,
+                          title='Helium-3<br>(log10(counts))'
+                          ),
+        ),
+        name='Helium-3 tubes',
+        text=labels[hist_non_zero_indices]
+    )
+    
+    # Sample
+    trace_2 = go.Scatter3d(
+        x=[0],
+        y=[0],
+        z=[0],
+        mode='markers',
+        marker=dict(
+            size=4,
+            line=dict(
+                color='rgba(0, 0, 0, 1)',
+                width=5.0
+            ),
+            opacity=1.0
+        ),
+        name='Sample'
+    )
+    
+    # Multi-Grid
+    H, __ = np.histogramdd(df_mg[['wch', 'gch']].values,
+                           bins=(96, 37),
+                           range=((0, 96), (96, 133)))
+    # Insert results into an array
+    hist = [[], [], [], []]
+    loc = 0
+    labels = []
+    for wch in range(0, 96):
+        for gch in range(96, 133):
+            x, y, z = dc.get_global_xyz(wch, gch, mg_offset, mg_theta)
+            hist[0].append(x)
+            hist[1].append(y)
+            hist[2].append(z)
+            hist[3].append(H[wch, gch-96])
+            loc += 1
+            labels.append('Wire channel: ' + str(wch) + '<br>'
+                          + 'Grid channel: ' + str(gch) + '<br>'
+                          + 'Counts: ' + str(H[wch, gch-96])
+                          )
+        
+    # Produce 3D histogram plot
+    MG_3D_trace = go.Scatter3d(x=hist[0],
+                               y=hist[1],
+                               z=hist[2],
+                               mode='markers',
+                               marker=dict(size=5,
+                                           color=hist[3],
+                                           colorscale='Jet',
+                                           opacity=1,
+                                           colorbar=dict(thickness=20,
+                                                         title='Multi-Grid<br>(counts)'
+                                                         ),
+                                           ),
+                               text=labels,
+                               name='Multi-Grid',
+                               scene='scene1'
+                               )
+    trace_1.marker.colorbar.x = 0.05
+    MG_3D_trace.marker.colorbar.x = 0.15
+    data = [trace_1, trace_2, MG_3D_trace]
+    # Include region of interest in Helium-3 tubes
+    if region_edges is not None:
+        trace_4 = go.Scatter3d(
+                    x=he3_mapping['x'][region_edges]-0.05,
+                    y=he3_mapping['y'][region_edges],
+                    z=he3_mapping['z'][region_edges]-0.05,
+                    mode='lines',
+                    line=dict(color='rgba(0, 0, 0, 1)',
+                              width=5),
+                    name='Region of interest',
+                    )
+        data.append(trace_4)
+
+    camera = dict(
+        up=dict(x=0, y=1, z=0),
+        center=dict(x=0, y=0, z=0),
+        eye=dict(x=-1.5, y=1.5, z=-1.5)
+    )
+    
+    layout = go.Layout(
+        margin=dict(
+            l=0,
+            r=0,
+            b=0,
+            t=0
+        ),
+        scene=dict(
+                camera=camera,
+                xaxis = dict(
+                        title='x (m)'),
+                yaxis = dict(
+                        title='y (m)'),
+                zaxis = dict(
+                        title='z (m)'),
+                aspectmode='data')
+    )
+    
+    fig = go.Figure(data=data, layout=layout)
+    fig.layout.showlegend = False
+    fig.update_layout(legend=dict(
+        yanchor="top",
+        y=0.99,
+        xanchor="left",
+        x=0.01
+    ))
+    py.offline.plot(fig,
+                    filename='../output/mg_and_he3_hist.html',
+                    auto_open=True)

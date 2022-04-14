@@ -233,7 +233,7 @@ def he3_plot_3D_histogram(df, mapping, region_edges=None):
     if region_edges is not None:
         data = [trace_1, trace_2, trace_3]
     else:
-        data = [trace_2, trace_3]
+        data = [trace_1, trace_3]
     fig = go.Figure(data=data, layout=layout)
     fig.update_layout(legend=dict(
         yanchor="top",
@@ -241,7 +241,10 @@ def he3_plot_3D_histogram(df, mapping, region_edges=None):
         xanchor="left",
         x=0.01
     ))
-    py.offline.iplot(fig)
+    #py.offline.iplot(fig)
+    py.offline.plot(fig,
+                    filename='../output/he3_hist.html',
+                    auto_open=True)
 
 
 # ==============================================================================

@@ -62,3 +62,29 @@ def distance_calibration(df, E_in_meV, moderator_to_sample_in_m, number_bins=100
                 # Save in distances 3D-matrix
                 distances[bus, wch, gch] = distance_in_m
     return distances
+
+# ==============================================================================
+#                                GET XYZ-COORDINATES
+# ==============================================================================
+
+def get_local_xyz(wch, gch):
+    x = (211.57 - 10*(wch % 16)) * 1e-3
+    y = (- 25*(37 - (gch - 96)) - 85.96) * 1e-3
+    z = (233.7 - 25*(5 - (wch // 16))) * 1e-3
+    return x, y, z
+
+def get_global_xyz(wch, gch, offset, theta):
+    # Get coordinate in local coordinate system
+    x, y, z = get_local_xyz(wch, gch)
+    # Rotate according to rotation
+    xr, zr = get_new_x(x, z, theta), get_new_z(x, z, theta)
+    # Translate into position in global coordinate system
+    xrt, yt, zrt = xr+offset['x'], y+offset['y'], zr+offset['z']
+    return xrt, yt, zrt
+    
+def get_new_x(x, z, theta):
+    return np.cos(np.arctan(z/x)+theta)*np.sqrt(x**2 + z**2)
+
+def get_new_z(x, z, theta):
+    return np.sin(np.arctan(z/x)+theta)*np.sqrt(x**2 + z**2)
+
