@@ -182,6 +182,12 @@ def extract_clusters(data, bus_w=3, bus_wg=2):
 
     """
     size = len(data)
+    # Declare list of all allowed wire channels
+    wire_channels = np.concatenate((np.arange(2, 18, 1),
+                                    np.arange(22, 38, 1),
+                                    np.arange(42, 58, 1),
+                                    np.arange(62, 78, 1)))
+    grid_channels = np.arange(81, 118, 1)
     # Initiate dictionary to store clusters
     ce_dict = {'bus': (-1) * np.ones([size], dtype=int),
                'time': (-1) * np.ones([size], dtype=int),
@@ -191,7 +197,8 @@ def extract_clusters(data, bus_w=3, bus_wg=2):
                'wadc': np.zeros([size], dtype=int),
                'gadc': np.zeros([size], dtype=int),
                'wm': np.zeros([size], dtype=int),
-               'gm': np.zeros([size], dtype=int)}
+               'gm': np.zeros([size], dtype=int),
+               'is_trigger': np.zeros([size], dtype=int)}
     # Declare wire channel offset depending on bus
     offset = np.zeros(9)
     offset[bus_wg] = 32
@@ -208,6 +215,7 @@ def extract_clusters(data, bus_w=3, bus_wg=2):
         if (word & TYPE_MASK) == HEADER:
             is_open = True
             is_trigger = (word & TRIGGER_MASK) == TRIGGER
+            #print(bin(word))
             max_adc_w, max_adc_g = 0, 0
             ce_index += 1
         elif ((word & DATA_MASK) == DATA_BUS_START) & is_open:
@@ -222,8 +230,8 @@ def extract_clusters(data, bus_w=3, bus_wg=2):
                 ce_dict['bus'][ce_index] = 9
             else:
                 ce_dict['bus'][ce_index] = bus
-            # Wires have channels between 0->79
-            if 0 <= channel <= 79:
+            # Wires have channels between as specified above
+            if channel in wire_channels:
                 # Save cluster data
                 ce_dict['wadc'][ce_index] += adc
                 ce_dict['wm'][ce_index] += 1
@@ -231,8 +239,8 @@ def extract_clusters(data, bus_w=3, bus_wg=2):
                 wch = (channel^1) - 2 - (channel//20)*4 + offset[bus]
                 # Use wire with largest collected charge as hit position
                 if adc > max_adc_w: max_adc_w, ce_dict['wch'][ce_index] = adc, wch
-            # Grids have channels between 80->119
-            elif 80 <= channel <= 119:
+            # Grids have channels between 81->119
+            elif channel in grid_channels:
                 # Save cluster data, and check if current channel collected most charge
                 ce_dict['gadc'][ce_index] += adc
                 ce_dict['gm'][ce_index] += 1
@@ -251,13 +259,14 @@ def extract_clusters(data, bus_w=3, bus_wg=2):
             time = (extended_time_stamp | time_stamp) if is_exts else time_stamp
             # Update Triggertime, if this was a trigger event
             if is_trigger: trigger_time = time
+            if is_trigger: ce_dict['is_trigger'][ce_index] = 1
             # Save cluster data
-            if is_data:
-                ce_dict['time'][ce_index] = time
-                ce_dict['tof'][ce_index] = time - trigger_time
-                # Reset temporary variables, related to data in events
-                previous_bus, bus = -1, -1
-                max_adc_w, max_adc_g = 0, 0
+            #if is_data:
+            ce_dict['time'][ce_index] = time
+            ce_dict['tof'][ce_index] = time - trigger_time
+            # Reset temporary variables, related to data in events
+            previous_bus, bus = -1, -1
+            max_adc_w, max_adc_g = 0, 0
             # Reset temporary boolean variables, related to word-headers
             is_open, is_trigger, is_data = False, False, False
 
@@ -300,6 +309,14 @@ def extract_events(data, bus_w=3, bus_wg=2):
 
     """
     size = len(data)
+    # Declare list of all allowed wire channels
+    wire_channels = np.concatenate((np.arange(2, 18, 1),
+                                    np.arange(22, 38, 1),
+                                    np.arange(42, 58, 1),
+                                    np.arange(62, 78, 1)))
+    grid_channels = np.arange(81, 118, 1)
+    #wire_channels = np.arange(0, 80, 1)
+    #grid_channels = np.arange(80, 120, 1)
     # Initiate dictionary to store events
     e_dict = {'bus': (-1) * np.ones([size], dtype=int),
               'ch': (-1) * np.ones([size], dtype=int),
@@ -331,7 +348,7 @@ def extract_events(data, bus_w=3, bus_wg=2):
             else:
                 e_dict['bus'][e_index] = bus
             # Wires have channels between 0->79
-            if 0 <= channel <= 79:
+            if channel in wire_channels:
                 # Calculate wire channel
                 wch = (channel^1) - 2 - (channel//20)*4 + offset[bus]
                 # Save event data and increase event index and event count
@@ -340,7 +357,7 @@ def extract_events(data, bus_w=3, bus_wg=2):
                 e_index += 1
                 e_count += 1
             # Grids have channels between 80->119
-            elif 80 <= channel <= 119:
+            elif channel in grid_channels:
                 # Calculate grid channel
                 gch = channel + 15
                 # Save event data and increase event index and event count

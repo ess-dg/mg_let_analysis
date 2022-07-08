@@ -13,8 +13,11 @@ import plotly as py
 import plotly.graph_objs as go
 
 import plotting.helper_functions as plotting_hf
+
 import file_handling.mg_seq.mg_seq_manage as mg_manage
+
 import calculations.distance_calibration as dc
+import calculations.energy as e_calc
 
 # ==============================================================================
 #                                   PHS (1D)
@@ -140,6 +143,48 @@ def clusters_phs_plot(clusters, bus, duration, vmin, vmax):
                weights=(1/duration)*np.ones(len(clusters.wadc)))
     cbar = plt.colorbar()
     cbar.set_label('Counts/s')
+    
+# ==============================================================================
+#                               TOF
+# ==============================================================================
+
+
+def clusters_tof_plot(clusters, file_name, interval=None, bins=100, label=None):
+    """
+
+    """
+    plt.xlabel('tof (s)')
+    plt.ylabel('Counts')
+    plt.hist(clusters.tof * 62.5e-9, bins=bins, histtype='step', range=interval, label=label)
+    plt.yscale('log')
+    plt.title(file_name)
+    
+def clusters_tof_per_voxel(df, file_name, number_bins=100):
+    """
+
+    """
+    # Create folder for histograms
+    dirname = os.path.dirname(__file__)
+    folder_path = os.path.join(dirname, '../output/%s_tof_histograms' % file_name)
+    mkdir_p(folder_path)
+    wchs = np.arange(0, 96, 1)
+    gchs = np.arange(96, 133, 1)
+    for wch in wchs:
+        for gch in gchs:
+            df_voxel = df[(df.gch == gch) & (df.wch == wch)]
+            plt.xlabel('tof (s)')
+            plt.ylabel('Counts')
+            hist, bins = np.histogram(df_voxel.tof * 62.5e-9, bins=number_bins)
+            bin_centers = (bins[:-1] + bins[1:]) / 2
+            plt.yscale('log')
+            plt.title('wch=%d, gch=%d, file: %s' % (wch, gch, file_name))
+            # Save data
+            dirname = os.path.dirname(__file__)
+            output_path = '%s/wch_%d_gch_%d.txt' % (folder_path, wch, gch)
+            # Save as text_file
+            np.savetxt(output_path,
+                       np.transpose(np.array([bin_centers, hist, np.sqrt(hist)])),
+                       delimiter=",",header='tof (us), counts, error')
 
 
 # ==============================================================================
@@ -277,14 +322,15 @@ def multiplicity_plot(clusters, bus, duration, vmin=None, vmax=None):
                                         weights=(1/duration)*np.ones(len(clusters.wm)))
     # Iterate through all squares and write percentages
     tot = clusters.shape[0] * (1/duration)
-    font_size = 6.5
+    font_size = 10.5
     for i in range(len(ybins)-1):
         for j in range(len(xbins)-1):
             if hist[j, i] > 0:
                 text = plt.text(xbins[j]+0.5, ybins[i]+0.5,
-                                '%.0f%%' % (100*(hist[j, i]/tot)),
+                                '%.0f' % (100*(hist[j, i]/tot)) + '\%',
                                 color="w", ha="center", va="center",
-                                fontweight="bold", fontsize=font_size)
+                                #fontweight="bold",
+                                fontsize=font_size)
                 text.set_path_effects([path_effects.Stroke(linewidth=1,
                                                            foreground='black'),
                                        path_effects.Normal()])
@@ -435,7 +481,7 @@ def mg_plot_basic_bus(run, bus, clusters_unfiltered, events, df_filter, area,
 
     """
 
-    plotting_hf.set_thick_labels(15)
+    #plotting_hf.set_thick_labels(10)
 
     # Filter clusters
     clusters = mg_manage.filter_data(clusters_unfiltered, df_filter)
@@ -443,7 +489,11 @@ def mg_plot_basic_bus(run, bus, clusters_unfiltered, events, df_filter, area,
     # Declare parameters
     duration_unf = ((clusters_unfiltered.time.values[-1]
                     - clusters_unfiltered.time.values[0]) * 62.5e-9)
-    duration = (clusters.time.values[-1] - clusters.time.values[0]) * 62.5e-9
+    #duration = duration_unf
+    if len(clusters.time.values > 0):
+        duration = (clusters.time.values[-1] - clusters.time.values[0]) * 62.5e-9
+    else:
+        duration = -1
 
     # Filter data from only one bus
     events_bus = events[events.bus == bus]
@@ -451,7 +501,7 @@ def mg_plot_basic_bus(run, bus, clusters_unfiltered, events, df_filter, area,
     clusters_uf_bus = clusters_unfiltered[clusters_unfiltered.bus == bus]
 
     fig = plt.figure()
-    plt.suptitle(plot_title, fontsize=15, fontweight='bold', y=1.00005)
+    #plt.suptitle(plot_title, fontsize=15, fontweight='bold', y=0.98)
     # PHS - 2D
     plt.subplot(4, 2, 1)
     vmin = 1
@@ -464,7 +514,7 @@ def mg_plot_basic_bus(run, bus, clusters_unfiltered, events, df_filter, area,
     plt.subplot(4, 2, 2)
     bins_phs_1d = 300
     phs_1d_plot(clusters_bus, clusters_uf_bus, bins_phs_1d, bus, duration)
-    plt.yscale('log')
+    #plt.yscale('log')
     plt.title('PHS')
 
     # Coincidences - 2D
@@ -529,3 +579,265 @@ def mg_plot_basic_bus(run, bus, clusters_unfiltered, events, df_filter, area,
     plt.tight_layout()
     output_path = '../output/%s_summary_bus_%d.png' % (run, bus)
     fig.savefig(output_path, bbox_inches='tight')
+    plt.show()
+    
+# ==============================================================================
+#                      PLOT ALL BASIC PLOTS FOR ONE BUS
+# ==============================================================================
+
+def mg_plot_basic_bus_plus(run, bus, clusters_unfiltered, events, df_filter, area,
+                           Ei_in_meV, fig, dE_interval=None, plot_title=''):
+    """
+    Function to plot all basic plots for SEQUOIA detector, for a single bus,
+    such as PHS, Coincidences and rate.
+
+    Ordering of plotting is:
+
+    PHS 2D             - NOT FILTERED
+    PHS 1D             - FILTERED AND NOT FILTERED
+    MULTIPLICITY       - FILTERED
+    PHS CORRELATION    - FILTERED
+    COINCIDENCES 2D    - FILTERED
+    RATE               - FILTERED
+    UNIFORMITY (WIRES) - FILTERED
+    UNIFORMITY (GRIDS) - FILTERED
+
+    Note that all plots are filtered except the PHS 2D.
+
+    Args:
+        run (str): File run
+        bus (int): Bus to plot
+        clusters_unfiltered (DataFrame): Unfiltered clusteres
+        events (DataFrame): Individual events
+        df_filter (dict): Dictionary specifying the filter which will be used
+                          on the clustered data
+        area (float): Area in m^2 of the active detector surface
+        plot_title (str): Title of PLOT
+
+    Yields:
+        Plots the basic analysis
+
+    """
+
+    plotting_hf.set_thick_labels(10)
+
+    # Filter clusters
+    clusters = mg_manage.filter_data(clusters_unfiltered, df_filter)
+
+    # Declare parameters
+    duration_unf = ((clusters_unfiltered.time.values[-1]
+                    - clusters_unfiltered.time.values[0]) * 62.5e-9)
+    #duration = duration_unf
+    duration = (clusters.time.values[-1] - clusters.time.values[0]) * 62.5e-9
+
+    # Filter data from only one bus
+    events_bus = events[events.bus == bus]
+    clusters_bus_no_extra_filter = clusters[clusters.bus == bus]
+    clusters_uf_bus = clusters_unfiltered[clusters_unfiltered.bus == bus]
+    
+    clusters_bus = clusters_bus_no_extra_filter
+    # Perform additional filter based on delta E
+    if dE_interval is not None:
+        mg_offset = {'x': -1.612, 'y': -0.862, 'z': 2.779} 
+        mg_theta = 57.181 * np.pi/180
+        moderator_to_sample_in_m = 25
+        tof_in_us = clusters_bus_no_extra_filter.tof.values * 62.5e-9 * 1e6
+        sample_to_detection_in_m = dc.get_sample_to_detection_distances(clusters_bus_no_extra_filter['wch'], clusters_bus_no_extra_filter['gch'], mg_offset, mg_theta)
+        delta_E = e_calc.get_energy_transfer(Ei_in_meV, tof_in_us, sample_to_detection_in_m, moderator_to_sample_in_m)
+        dE_filter = (delta_E >= dE_interval[0]) & (delta_E <= dE_interval[1])
+        clusters_bus = clusters_bus[dE_filter]
+
+
+    plt.suptitle(plot_title, fontsize=15, fontweight='bold', y=0.98)
+    # PHS - 2D
+    plt.subplot(4, 4, 1)
+    vmin = 1
+    vmax = events.shape[0] // 1000 + 100
+    if events_bus.shape[0] > 0:
+        phs_2d_plot(events_bus, vmin, vmax)
+    plt.title('PHS vs Channel')
+
+    # PHS - 1D
+    plt.subplot(4, 4, 2)
+    bins_phs_1d = 300
+    phs_1d_plot(clusters_bus, clusters_uf_bus, bins_phs_1d, bus, duration)
+    plt.yscale('log')
+    plt.title('PHS')
+
+    # Coincidences - 2D
+    plt.subplot(4, 4, 9)
+    if clusters.shape[0] != 0:
+        vmin = (1 * 1/duration)
+        vmax = (clusters.shape[0] // 450 + 5) * 1/duration
+    else:
+        duration = 1
+        vmin = 1
+        vmax = 1
+
+    number_events = clusters_bus.shape[0]
+    number_events_error = np.sqrt(clusters_bus.shape[0])
+    events_per_s = number_events/duration
+    events_per_s_m2 = events_per_s/area
+    events_per_s_m2_error = number_events_error/(duration*area)
+    title = ('Coincidences\n(%d events, %.3f±%.3f events/s/m$^2$)' % (number_events,
+                                                                      events_per_s_m2,
+                                                                      events_per_s_m2_error))
+    if number_events > 1:
+        clusters_2d_plot(clusters_bus, title, vmin, vmax, duration)
+
+    # Rate
+    plt.subplot(4, 4, 10)
+    number_bins = 40
+    rate_plot(clusters_bus, number_bins, bus)
+    plt.title('Rate vs time')
+
+    # Multiplicity
+    plt.subplot(4, 4, 5)
+    if clusters_bus.shape[0] > 1:
+        multiplicity_plot(clusters_bus, bus, duration)
+    plt.title('Event multiplicity')
+
+    # Coincidences - PHS
+    plt.subplot(4, 4, 6)
+    if clusters.shape[0] != 0:
+        vmin = 1/duration
+        vmax = (clusters.shape[0] // 450 + 1000) / duration
+    else:
+        duration = 1
+        vmin = 1
+        vmax = 1
+    if clusters_bus.shape[0] > 1:
+        clusters_phs_plot(clusters_bus, bus, duration, vmin, vmax)
+    plt.title('Charge coincidences')
+
+    # Uniformity - grids
+    plt.subplot(4, 4, 14)
+    grid_histogram(clusters_bus, bus, duration)
+    plt.title('Uniformity - grids')
+
+    # Uniformity - wires
+    plt.subplot(4, 4, 13)
+    wire_histogram(clusters_bus, bus, duration)
+    plt.title('Uniformity - wires')
+    
+    # Energy transfer
+    bins_dE = 100
+    mg_offset = {'x': -1.612, 'y': -0.862, 'z': 2.779} 
+    mg_theta = 57.181 * np.pi/180
+    moderator_to_sample_in_m = 25
+    delta_E_limit = Ei_in_meV*0.2
+    
+    tof_in_us_uf = clusters_bus_no_extra_filter.tof.values * 62.5e-9 * 1e6
+    sample_to_detection_in_m_uf = dc.get_sample_to_detection_distances(clusters_bus_no_extra_filter['wch'], clusters_bus_no_extra_filter['gch'], mg_offset, mg_theta)
+    delta_E_uf = e_calc.get_energy_transfer(Ei_in_meV, tof_in_us_uf, sample_to_detection_in_m_uf, moderator_to_sample_in_m)
+    
+    tof_in_us_f = clusters_bus.tof.values * 62.5e-9 * 1e6
+    sample_to_detection_in_m_f = dc.get_sample_to_detection_distances(clusters_bus['wch'], clusters_bus['gch'], mg_offset, mg_theta)
+    delta_E_f = e_calc.get_energy_transfer(Ei_in_meV, tof_in_us_f, sample_to_detection_in_m_f, moderator_to_sample_in_m)
+    
+    plt.subplot(4, 4, 7)
+    plt.hist(delta_E_uf, range=[-delta_E_limit, delta_E_limit], bins=bins_dE, histtype='step', label='Without extra filter')
+    plt.hist(delta_E_f, range=[-delta_E_limit, delta_E_limit], bins=bins_dE, histtype='step', label='With extra filter')
+    plt.grid(True, which='major', linestyle='--', zorder=0)
+    plt.grid(True, which='minor', linestyle='--', zorder=0)
+    plt.yscale('log')
+    plt.xlabel('E$_i$ - E$_f$ (meV)')
+    plt.ylabel('counts')
+    plt.legend()
+    plt.title('Energy transfer at %.2f meV' % Ei_in_meV)
+    
+    
+    # Time-of-Flight, zoom
+    plt.subplot(4, 4, 4)
+    v_in_km_per_s = np.sqrt(Ei_in_meV / 5.277)
+    average_total_distance = 25 + sum(sample_to_detection_in_m_f)/len(sample_to_detection_in_m_f)
+    tof_in_us = ((average_total_distance * 1e-3)) / (v_in_km_per_s*1e-6)
+    interval = [tof_in_us*1e-6*0.9, tof_in_us*1e-6*1.1]
+    clusters_tof_plot(clusters_bus_no_extra_filter, run, interval=interval, label='Without extra filter')
+    clusters_tof_plot(clusters_bus, run, interval=interval, label='With extra filter')
+    plt.grid(True, which='major', linestyle='--', zorder=0)
+    plt.grid(True, which='minor', linestyle='--', zorder=0)
+    plt.legend()
+    plt.title('Time-of-flight around %.2f meV' % Ei_in_meV)
+
+    
+    # Time-of-Flight, full
+    plt.subplot(4, 4, 3)
+    clusters_tof_plot(clusters_bus_no_extra_filter, run, interval=[0, 0.1], label='Without extra filter')
+    clusters_tof_plot(clusters_bus, run, interval=[0, 0.1], label='With extra filter')
+    plt.grid(True, which='major', linestyle='--', zorder=0)
+    plt.grid(True, which='minor', linestyle='--', zorder=0)
+    plt.legend()
+    plt.title('Time-of-flight')
+    
+    
+    # Time-of-flight vs distance
+    plt.subplot(4, 4, 8)
+    plt.xlabel('ToF ($\mu$s)')
+    plt.ylabel('Distance (m)')
+    plt.title('ToF vs Distance (using extra filter)')
+    bins = [200, 200]
+    #interval = [[0, 100000], [0, ]]
+    plt.hist2d(tof_in_us_f, sample_to_detection_in_m_f,
+               bins=bins,
+               norm=LogNorm(),
+               #vmin=vmin, vmax=vmax,
+               #range=ADC_range,
+               cmap='jet',
+               weights=(1/duration)*np.ones(len(tof_in_us_f)))
+    cbar = plt.colorbar()
+    cbar.set_label('Counts/s')
+    
+    # Energy, zoom
+    plt.subplot(4, 4, 11)
+    plt.xlabel('Energy (meV)')
+    plt.ylabel('Counts')
+    plt.title('Energy distribution (when assuming elastic scattering)\nzoom')
+    bins_E = 100
+    energies_f = e_calc.get_energy(tof_in_us_f, sample_to_detection_in_m_f, moderator_to_sample_in_m)
+    energies_uf = e_calc.get_energy(tof_in_us_uf, sample_to_detection_in_m_uf, moderator_to_sample_in_m)
+    plt.hist(energies_uf, bins=bins_E, histtype='step', label='Without extra filter', range=[Ei_in_meV*0.9, Ei_in_meV*1.1])
+    plt.hist(energies_f, bins=bins_E, histtype='step', label='With extra filter', range=[Ei_in_meV*0.9, Ei_in_meV*1.1])
+    plt.yscale('log')
+    plt.legend()
+    
+    # Energy, full
+    plt.subplot(4, 4, 12)
+    plt.xlabel('Energy (meV)')
+    plt.ylabel('Counts')
+    plt.title('Energy distribution (when assuming elastic scattering)\nfull')
+    bins_E = 100
+    energies_f = e_calc.get_energy(tof_in_us_f, sample_to_detection_in_m_f, moderator_to_sample_in_m)
+    energies_uf = e_calc.get_energy(tof_in_us_uf, sample_to_detection_in_m_uf, moderator_to_sample_in_m)
+    plt.hist(energies_uf, bins=bins_E, histtype='step', label='Without extra filter', range=[0, 50])
+    plt.hist(energies_f, bins=bins_E, histtype='step', label='With extra filter', range=[0, 50])
+    plt.yscale('log')
+    plt.legend()
+
+    # Save data
+    fig.set_figwidth(19)
+    fig.set_figheight(16)
+    plt.tight_layout()
+
+# ==============================================================================
+#                               HELPER FUNCTIONS
+# ==============================================================================
+
+def mkdir_p(my_path):
+    """
+    Creates a directory, equivalent to using mkdir -p on the command line.
+
+    Args:
+        my_path (str): Path to where the new folder should be created.
+
+    Yields:
+        A new folder at the requested path.
+    """
+    from errno import EEXIST
+    from os import makedirs,path
+    try:
+        makedirs(my_path)
+    except OSError as exc: # Python >2.5
+        if exc.errno == EEXIST and path.isdir(my_path):
+            pass
+        else: raise

@@ -6,6 +6,7 @@ manage.py: Contains functions to manage Multi-Grid data
 
 import numpy as np
 import pandas as pd
+import datetime
 
 import file_handling.mg_ref.mg_ref_read as mg_read
 
@@ -31,11 +32,11 @@ def filter_data(df, parameters):
     for parameter, (min_val, max_val, filter_on) in parameters.items():
         if filter_on:
             if parameter == 'layer':
-                df_red = df_red[((df_red.wch % 20) >= min_val) &
-                                ((df_red.wch % 20) <= max_val)]
+                df_red = df_red[((df_red.wch % 16) >= min_val) &
+                                ((df_red.wch % 16) <= max_val)]
             elif parameter == 'row':
-                df_red = df_red[(((df_red.bus * 4) + df_red.wch//20) >= min_val) &
-                                (((df_red.bus * 4) + df_red.wch//20) <= max_val)]
+                df_red = df_red[((df_red.wch//16) >= min_val) &
+                                ((df_red.wch//16) <= max_val)]
             else:
                 df_red = df_red[(df_red[parameter] >= min_val) &
                                 (df_red[parameter] <= max_val)]
@@ -62,12 +63,12 @@ def merge_files(dfs):
     # Declare first element and get max time
     df_full = dfs[0]
     start = df_full.shape[0]
-    max_time = df_full.tail(1)['time'].array[0]
+    max_time = max(df_full['time'].to_numpy())
     # Append all files so that subsequent files get an increased timestamp
     for df in dfs[1:]:
         df_full = df_full.append(df, ignore_index=True)
         df_full['time'].loc[start:] = df_full['time'].loc[start:] + max_time
-        max_time = df_full.tail(1)['time'].array[0]
+        max_time = max(df_full['time'].to_numpy())
         start = df_full.shape[0]
     return df_full
 
@@ -175,3 +176,33 @@ def load_data(path):
     """
     df = pd.read_hdf(path, 'df')
     return df
+
+
+def mg_get_start_time_in_posix(file_name):
+    """
+    Function to get measurement start time.
+
+    Args:
+        zipped_path (str): Location of raw data
+
+    Returns:
+        time_in_posix (float): Start time in posix
+
+    """
+    # Extract start time
+    year = int('20%s' % file_name[-13:-11])
+    #print('Year', year)
+    month = int(file_name[-11:-9])
+    #print('Month', month)
+    day = int(file_name[-9:-7])
+    #print('Day', day)
+    hour = int(file_name[-6:-4])
+    #print('Hour', hour)
+    minute = int(file_name[-4:-2])
+    #print('Minute', minute)
+    second = int(file_name[-2:])
+    dt = datetime.datetime(year, month, day, hour, minute, second)
+    print(dt)
+    #print('...')
+    time_in_posix = datetime.datetime.timestamp(dt)
+    return time_in_posix

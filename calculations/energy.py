@@ -6,6 +6,7 @@ energy.py: Contains functions which makes energy calculations.
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
 # ==============================================================================
@@ -48,8 +49,7 @@ def get_energy_transfer(Ei_in_meV, tof_in_us, sample_to_detection_in_m,
     Args:
         Ei_in_meV (float): Initial energy in meV
         tof_in_us (np.array): Time-of-flight in micro seconds
-        sample_to_detection_in_m (np.array): Sample-to-detection distance
-                                             in meters
+        sample_to_detection_in_m (np.array): Sample-to-detection distance in meters
         moderator_to_sample_in_m (float): Moderator-to-sample distance in meters
 
     Return:

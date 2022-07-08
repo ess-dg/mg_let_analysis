@@ -32,6 +32,34 @@ def import_data(path):
     df = pd.DataFrame(id_and_tof_dict)
     return df
 
+def import_histogram_data(path):
+    """ Imports data from LET helium-3 tubes saved as histograms.
+
+    Args:
+        path (str): Path to '.nxs'-file that contains the data
+
+    Returns:
+
+    """
+    # Import data
+    nxs = h5py.File(path, 'r')
+    histograms = nxs['raw_data_1']['instrument']['detector_1']['counts'][0]
+    histograms_t = np.transpose(nxs['raw_data_1']['instrument']['detector_1']['counts'][0])
+    #hist_sums = np.empty([len(histograms)])
+    #for i, histogram in enumerate(histograms):
+        #print(histogram)
+        #print(len(histogram))
+        #print(sum(histogram))
+        #hist_sums[i] = sum(histogram)
+    tof_edges = nxs['raw_data_1']['instrument']['detector_1']['time_of_flight'][()]
+    tof_centers = 0.5 * (tof_edges[1:] + tof_edges[:-1])
+    tof_dict = {}
+    # Prepare dictionary
+    for tof_center, histogram in zip(tof_centers, histograms_t):
+        tof_dict.update({tof_center: histogram})
+    # Convert to dataframe
+    df = pd.DataFrame(tof_dict)
+    return df
 
 # ==============================================================================
 #                                IMPORT MAPPING
@@ -63,4 +91,5 @@ def get_pixel_to_xyz_mapping(path):
                      'r': r,
                      'theta': theta * (360/(2*np.pi)),
                      'phi': phi * (360/(2*np.pi))}
+    position_df = pd.DataFrame(position_dict)
     return position_dict

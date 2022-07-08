@@ -10,30 +10,23 @@ import matplotlib.patheffects as path_effects
 import numpy as np
 import pandas as pd
 
+import calculations.energy as e_calc
+import calculations.fitting as fit
+
 import plotting.common_plot as cmplt
 
+
 # ==============================================================================
-#                     HELIUM-3: PLOT FIGURE-OF-MERITS
+#                              GET FIGURE-OF-MERIT
 # ==============================================================================
 
-def plot_figure_of_merits(df, number_bins, mapping, region_of_interest,
-                          moderator_to_sample_in_m, run, prominence=1e4):
-    # Filter data
-    df_filtered = df[df['pixel_id'].isin(region_of_interest)]
-    # Get figure-of-merits
-    values = cmplt.get_all_foms(df_filtered['tof'],
-                                mapping['r'][df_filtered['pixel_id']],
-                                number_bins,
-                                moderator_to_sample_in_m,
-                                prominence=prominence,
-                                run=run)
-    Eis, foms, peak_areas, shoulder_areas = values
-    # Plot figure-of-merits
-    fig = plt.figure()
-    plt.plot(Eis, foms, 'o', color='black')
-    plt.xlabel('Energy (meV)')
-    plt.ylabel('fom')
-    plt.grid(True, which='major', linestyle='--', zorder=0)
-    plt.grid(True, which='minor', linestyle='--', zorder=0)
-    plt.title('Figure-of-merit vs incident neutron energy')
-    plt.tight_layout()
+def get_figure_of_merit(Ei_in_meV, tof_in_us, sample_to_detection_in_m,
+                        moderator_to_sample_in_m):
+    
+    # Get event-by-event information on energy transfer
+    delta_E = e_calc.get_energy_transfer(Ei_in_meV, tof_in_us,
+                                         sample_to_detection_in_m,
+                                         moderator_to_sample_in_m)
+    
+    
+    

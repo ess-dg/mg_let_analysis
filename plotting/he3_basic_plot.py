@@ -11,8 +11,11 @@ import pandas as pd
 from plotly.offline import iplot, plot
 import plotly as py
 import plotly.graph_objects as go
+import plotly.io as pio
 
 import plotting.common_plot as cmplt
+
+import calculations.normalization as norm
 
 # ==============================================================================
 #                               PLOT COORDINATES
@@ -120,20 +123,65 @@ def he3_plot_coordinates(pixels, region=None):
                 zaxis = dict(
                         title='z (m)'),)
     )
-    py.offline.init_notebook_mode()
+    
+    # Plot pixel delimiters
+    b_traces = []
+    pixel_radius = 0.0254/2 # meters
+    tube_length = 4 # meters
+    pixels_per_tube = 256
+    pixel_height = tube_length / pixels_per_tube
+    #for x_c, y_c, z_c in zip(pixels['x'][5:10], pixels['y'][5:10], pixels['z'][5:10]):
+    #    # Get limits in cartesian coordinates
+    #    zx_angle = norm.get_zx_angle(x_c, z_c)
+    #    y_0, y_1 = y_c - pixel_height/2, y_c + pixel_height/2
+    #    z_0, z_1 = z_c + pixel_radius*np.cos(zx_angle - np.pi/2), z_c + pixel_radius*np.cos(zx_angle + np.pi/2)
+    #    x_0, x_1 = x_c + pixel_radius*np.sin(zx_angle - np.pi/2), x_c + pixel_radius*np.sin(zx_angle + np.pi/2)
+    #    # Plot pixel cells
+    #    xs = np.array([x_0, x_0, x_1, x_1, x_0])
+    #    ys = np.array([y_0, y_1, y_1, y_0, y_0])
+    #    zs = np.array([z_0, z_0, z_1, z_1, z_0])
+    #    b_trace = go.Scatter3d(x=xs,
+    #                           y=ys,
+    #                           z=zs,
+    #                   mode='line',
+    #                   line = dict(
+    #                                color='rgba(0, 0, 0, 0.5)',
+    #                                width=5)
+    #                    )
+    #    b_traces.append(b_trace)
+    #    # Plot corners of pixel cells based on converted to polar
+    #    phi_0, phi_1 = norm.get_phi(x_0, y_0), get_phi(x_1, y_1)
+    #    theta_0, theta_1 = norm.get_theta(x_0, y_0, z_0), norm.get_theta(x_1, y_1, z_1)
+    #    for phi in [phi_0, phi_1]:
+    #        for theta in [theta_0, theta_1]:
+    #            b_trace = go.Scatter3d(x=xs,
+    ##                                   y=ys,
+     #                                  z=zs,
+     #                                  mode='markers',
+     #                                  line = dict(
+     #                                           color='rgba(0, 0, 0, 0.5)',
+     #                                           width=5)
+     #                                   )
+                
+    
+    #py.offline.init_notebook_mode()
     if region is None:
         data = [trace_1, trace_2]
     else:
         data = [trace_1, trace_2, trace_3]
+    for b_trace in b_traces:
+        data.append(b_trace)
     fig = go.Figure(data=data, layout=layout)
-    py.offline.iplot(fig)
+    py.offline.plot(fig,
+                    filename='../output/he3_pixels_location.html',
+                    auto_open=True)
 
 
 # ==============================================================================
 #                              PLOT 3D HISTOGRAM
 # ==============================================================================
 
-def he3_plot_3D_histogram(df, mapping, region_edges=None):
+def he3_plot_3D_histogram(df, mapping, region_edges=None, label='', file_name=''):
     """
     Function to plot a 3D histogram of the hit-positions of neutrons in the
     helium-3 array.
@@ -160,6 +208,136 @@ def he3_plot_3D_histogram(df, mapping, region_edges=None):
         labels.append('ID: %d<br>Counts: %d<br>θ: %.2f°<br>φ: %.2f°' % (i, hist[i],
                                                                         mapping['theta'][i],
                                                                         mapping['phi'][i]))
+    labels = np.array(labels)
+    # Plot
+    trace_1 = go.Scatter3d(
+        x=mapping['x'][hist_non_zero_indices],
+        y=mapping['y'][hist_non_zero_indices],
+        z=mapping['z'][hist_non_zero_indices],
+        mode='markers',
+        marker=dict(
+            size=4,
+            color=np.log10(hist[hist_non_zero_indices]),
+            cmin=0,
+            cmax=4,
+            colorscale='Jet',
+            opacity=1,
+            colorbar=dict(thickness=20,
+                          title='counts',
+                          tickvals=[0, 1, 2, 3, 4],
+                          ticktext=['1', '1e1', '1e2', '1e3', '1e4']
+                          ),
+        ),
+        name='Helium-3 tubes',
+        text=labels[hist_non_zero_indices],
+    )
+
+    if region_edges is not None:
+        trace_2 = go.Scatter3d(
+                    x=mapping['x'][region_edges]-0.05,
+                    y=mapping['y'][region_edges],
+                    z=mapping['z'][region_edges]-0.05,
+                    mode='lines',
+                    line=dict(color='rgba(0, 0, 0, 1)',
+                              width=5),
+                    name='Region of interest',
+                    )
+
+    trace_3 = go.Scatter3d(
+        x=[0],
+        y=[0],
+        z=[0],
+        mode='markers',
+        marker=dict(
+            size=4,
+            line=dict(
+                color='rgba(255, 0, 0, 1)',
+                width=5.0
+            ),
+            opacity=1.0
+        ),
+        name='Sample'
+    )
+
+    camera = dict(
+        up=dict(x=0, y=1, z=0),
+        center=dict(x=0, y=0, z=0),
+        eye=dict(x=-1.5, y=1.5, z=-1.5)
+    )
+
+    layout = go.Layout(
+        margin=dict(
+            l=0,
+            r=0,
+            b=0,
+            t=0
+        ),
+        scene=dict(
+                camera=camera,
+                xaxis = dict(
+                        title='x (m)'),
+                yaxis = dict(
+                        title='y (m)'),
+                zaxis = dict(
+                        title='z (m)'))
+    )
+    py.offline.init_notebook_mode()
+    trace_1.marker.colorbar.x = 0.8
+    #trace_1.marker.colorbar.y = 0.65
+    #trace_1.marker.colorbar.len = 1#0.3
+    if region_edges is not None:
+        data = [trace_1, trace_2, trace_3]
+    else:
+        data = [trace_1]#, trace_3]
+    fig = go.Figure(data=data, layout=layout)
+    
+    annots =  [dict(x=0.5, y=0.95, text=label, showarrow=False, font=dict(size=20))]
+
+    # plot figure
+    fig['layout']['annotations'] = annots
+    #fig.update_layout(legend=dict(
+    #    yanchor="top",
+    #    y=0.8,
+    #    xanchor="left",
+    #    x=0.3,
+    #    bgcolor="White",
+    #    bordercolor="Black",
+    #    borderwidth=2
+    #))
+    fig.layout.showlegend = False
+    #py.offline.iplot(fig)
+    py.offline.plot(fig,
+                    filename='../output/he3_hist_%s.html' % file_name,
+                    auto_open=False)
+    pio.write_image(fig, '../output/he3_hist_%s.png' % file_name, scale=2)
+    
+
+def he3_plot_3D_histogram_v2(df, mapping, region_edges=None):
+    """
+    Function to plot a 3D histogram of the hit-positions of neutrons in the
+    helium-3 array.
+
+    Args:
+        df (pd.DataFrame): Helium-3 data
+        mapping (np.array): Helium-3 'pixel_id->(x, y, z)'->mapping
+        region (np.array): Pixel ID's corresponding to the edges of a small
+                           region in the Helium-3 array which is to be
+                           highlighted.
+
+    Yields:
+        A 3D histgram showing the distribution of hit-positions on the
+        helium-3 array.
+    """
+
+    # Histogram data
+    weights = df.iloc[:, :].sum(axis=1).to_numpy()
+    indices = df.index.values
+    number_bins = len(df.index.values)
+    hist, bins = np.histogram(indices, bins=number_bins, weights=weights)
+    hist_non_zero_indices = np.where(hist != 0)[0]
+    labels = []
+    for weight, index in zip(weights, indices):
+        labels.append('Counts: %d<br>ID %d' % (weight, index))
     labels = np.array(labels)
     # Plot
     trace_1 = go.Scatter3d(
